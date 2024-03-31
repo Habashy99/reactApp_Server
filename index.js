@@ -1,14 +1,7 @@
 const dotenv = require('dotenv').config();
 const express = require("express");
-const debug = require("debug")('worker:a');
-// const http = require("http");
+const debug = require("debug")('task:server');
 
-// const server = http.createServer((req, res) => {
-//     res.write("hello");
-//     res.end();
-
-// });
-// server.listen(8050);
 let tasks = [
     {
         "taskName": "firstTask",
@@ -19,8 +12,11 @@ let tasks = [
         "taskTime": "3h"
     }
 ];
+
 const app = express();
+
 debug('booting %o', 'My App');
+
 app.use(express.json());
 
 app.get("/", (req, res, next) => {
@@ -47,10 +43,10 @@ app.put("/tasks/edit", (req, res, next) => {
     res.send(`${task.taskName} with ${task.taskTime} has been changed`);
 })
 
-app.delete("/tasks/delete",(req,res,next)=>{
+app.delete("/tasks/delete", (req, res, next) => {
 
-    const taskIndex =req.body.index
-    const deletedTask = tasks.splice(taskIndex,1)
+    const taskIndex = req.body.index
+    const deletedTask = tasks.splice(taskIndex, 1)
 
     res.send(`${JSON.stringify(deletedTask)} has been deleted`);
 })
