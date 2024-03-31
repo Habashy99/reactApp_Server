@@ -28,7 +28,7 @@ app.get("/tasks", (req, res, next) => {
     debug(req.method + ' ' + req.url);
     try {
         if (tasks.length === 0) {
-            throw new Error("The task is empty")
+            res.send("The task is empty try to add more tasks");
         }
         res.send(tasks);
     } catch (error) {
