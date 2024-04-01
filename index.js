@@ -25,19 +25,19 @@ app.get("/", (req, res, next) => {
 });
 
 app.get("/tasks", (req, res, next) => {
-    debug(req.method + ' ' + req.url);
     try {
         if (tasks.length === 0) {
-            res.send("The task is empty try to add more tasks");
+            throw new Error("The task is empty try to add more tasks");
         }
-        res.send(tasks);
+        debug("all the tasks are retrieved")
+        return res.status(200).send(tasks);
     } catch (error) {
-        res.send(error);
+        debug("the tasks' array is empty")
+        return res.status(500).send(error);
     }
 });
 
 app.post("/tasks/add", (req, res, next) => {
-    debug(req.method + ' ' + req.url);
     try {
         const task = req.body.task
         if (task == {}) {
@@ -50,18 +50,15 @@ app.post("/tasks/add", (req, res, next) => {
             throw new Error("task time should not be empty")
         }
         tasks.push({ task });
-
-        if (tasks.length === tasks.length + 1) {
-            throw new Error("task not added")
-        }
-        res.send(`${task.taskName} has been added to the task array`);
+        debug("the task added to the tasks' array successfully")
+        return res.status(200).send(`${task.taskName} has been added to the task array`);
     } catch (error) {
-        res.send(error);
+        debug("the task fail to added to the tasks' array")
+        return res.status(400).send(error);
     }
 });
 
 app.put("/tasks/edit", (req, res, next) => {
-    debug(req.method + ' ' + req.url);
     try {
         if (req.body.index === undefined) {
             throw new Error("index should not be empty")
@@ -78,15 +75,15 @@ app.put("/tasks/edit", (req, res, next) => {
         }
         task.taskName = req.body.taskName;
         task.taskTime = req.body.taskTime;
-
-        res.send(`${task.taskName} with ${task.taskTime} has been changed`);
+        debug("the task was modified successfully")
+        return res.status(200).send(`${task.taskName} with ${task.taskTime} has been changed`);
     } catch (error) {
-        res.send(error);
+        debug("modifying the task failed")
+        return res.status(400).send(error);
     }
 })
 
 app.delete("/tasks/delete", (req, res, next) => {
-    debug(req.method + ' ' + req.url);
     try {
         const taskIndex = req.body.index
         if (typeof taskIndex === "string") {
@@ -96,9 +93,11 @@ app.delete("/tasks/delete", (req, res, next) => {
         if (deletedTask == []) {
             throw new Error("deleted task fail")
         }
-        res.send(`${JSON.stringify(deletedTask)} has been deleted`);
+        debug("the task has been deleted successfully")
+        return res.status(200).send(`${JSON.stringify(deletedTask)} has been deleted`);
     } catch (error) {
-        res.send(error);
+        debug("delete task failed")
+        return res.status(400).send(error);
     }
 })
 
