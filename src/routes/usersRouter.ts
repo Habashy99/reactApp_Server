@@ -1,39 +1,14 @@
-import express from 'express';
+import * as express from 'express';
 import debug from "debug";
 const debugServer = debug('task:server');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
+const bcrypt = require("bcrypt");
+import { UserDAO } from "../models/user"
 
-interface User {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    password: string;
-    address: string;
-}
-
-let users: User[] = [
-    {
-        id: "1",
-        "firstName": "body",
-        "lastName": "habashy",
-        "email": "habashy@yahoo.com",
-        "password": "123456",
-        "address": "Alex,Egypt"
-    },
-    {
-        id: "2",
-        "firstName": "mohamed",
-        "lastName": "habashy",
-        "email": "mohamedHabashy@yahoo.com",
-        "password": "123456",
-        "address": "Alex,Egypt"
-    }
-];
-
-
-router.get("/", (req, res) => {
+router.get("/", async (_req, res) => {
     try {
+        const users = await UserDAO.getAllUsers();
         if (users.length === 0) {
             return res.status(400).send("The users array is empty try to add more users");
         }
@@ -45,16 +20,14 @@ router.get("/", (req, res) => {
     }
 });
 
-router.get("/search", (req, res) => {
+router.get("/search", async (req, res) => {
     try {
-        const userID = req.query.id;
-        if (!userID) {
+        const userId = req.query.id;
+        if (!userId) {
             return res.status(400).send("The user id is empty");
         }
         debugServer("the user are retrieved");
-        const searchedUsers = users.filter((user) => {
-            return user.id == userID
-        });
+        const searchedUsers = await UserDAO.getUserById(Number(userId))
         return res.status(200).send(searchedUsers);
 
     } catch (error) {
@@ -62,16 +35,15 @@ router.get("/search", (req, res) => {
         return res.status(500).send({ message: "the user not found" });
     }
 });
-router.get("/email", (req, res) => {
+
+router.get("/email", async (req, res) => {
     try {
         const userEmail = req.query.email;
         if (!userEmail) {
             return res.status(400).send("The user email is empty");
         }
         debugServer("the user are retrieved");
-        const searchedUsers = users.filter((user) => {
-            return user.email == userEmail
-        });
+        const searchedUsers = await UserDAO.getUserByEmail(String(userEmail));
         return res.status(200).send(searchedUsers);
     } catch (error) {
         debugServer("the user not found %o", error)
@@ -79,40 +51,28 @@ router.get("/email", (req, res) => {
     }
 });
 
-router.post("/add", (req, res) => {
+router.put("/edit", async (req, res) => {
     try {
-        const user: User = req.body.user as User
-        if (Object.keys(user).length === 0) {
-            return res.status(400).send("error the user has no values");
+        const userId = Number(req.body.id)
+        if (userId === undefined) {
+            return res.status(400).send("id should not be empty");
         }
-        if (user.firstName == "" || user.lastName == "" || user.email == "" || user.password == "" || user.address == "") {
-            return res.status(400).send("user data should not be empty");
-        }
-        users.push(user);
-        debugServer("the user added to the users' array successfully")
-        return res.status(200).send(`${user.firstName} has been added to the user array`);
-    } catch (error) {
-        debugServer("the user fail to added to the users' array %o", error)
-        return res.status(400).send({ message: "the user fail to added to the users' array" });
-    }
-});
-
-router.put("/edit", (req, res) => {
-    try {
-        if (req.body.index === undefined) {
-            return res.status(400).send("index should not be empty");
-        }
-        const user = users[req.body.index];
-        if (Object.keys(user).length === 0) {
+        const user = await UserDAO.getUserById(userId);
+        if (!user) {
             throw new Error("fail to fetch the selected user")
         }
-        if (req.body.firstName === "" || req.body.lastName === "") {
+        if (req.body.firstName === "" || req.body.lastName === "" || req.body.address === "") {
             throw new Error("user name should not be empty")
         }
-        user.firstName = req.body.firstName;
-        user.lastName = req.body.lastName;
-        debugServer("the user was modified successfully")
-        return res.status(200).send(`${user.firstName} with ${user.lastName} has been changed`);
+        for (let key in req.body) {
+            if (user.hasOwnProperty(key)) {
+                user[key] = req.body[key];
+            }
+        }
+        await user.save()
+
+        debugServer(`${user.firstName} with ${user.lastName} and ${user.address} has been changed `)
+        return res.status(200).send({ message: `success` });
     } catch (error) {
         debugServer("modifying the user failed %o", error)
         return res.status(400).send({ message: "modifying the user failed" });
@@ -121,32 +81,41 @@ router.put("/edit", (req, res) => {
 
 router.delete("/delete", (req, res) => {
     try {
-        const userID = req.body.index
-        if (typeof userID === "string") {
+        const userId = Number(req.body.id)
+        if (typeof userId === "string") {
             return res.status(400).send("index should not be string must be number");
         }
-        const deletedUser = users.splice(userID, 1)
-        if (deletedUser.length === 0) {
-            throw new Error("deleted user fail")
-        }
+
+        // const userAndTasksTransaction = db.transaction(() => {
+        //     TaskDAO.deleteBulk(userId);
+        //     UserDAO.delete(userId);
+        // }
+        // );
+        // console.log(userAndTasksTransaction);
+        // userAndTasksTransaction()
         debugServer("the userID has been deleted successfully")
         return res.status(200).send({ message: "success" });
     } catch (error) {
+
         debugServer("delete userID failed %o", error);
         return res.status(500).send({ message: "delete userID failed" });
     }
 });
 
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
     try {
         const email = req.body.email;
         const password = req.body.password;
         if (!email || !password) {
             return res.status(400).send({ message: "email or password not valid" })
         }
-        const storedUser = users.find((user) => user.email == email);
-        if (email === storedUser.email && password === storedUser.password) {
-            let user = { ...storedUser, token: "123456" }
+        let storedUser = await UserDAO.getUserByEmail(email)
+        const verifyHashedPassword = await bcrypt.compare(password, storedUser.password)
+        if (email === storedUser.email && verifyHashedPassword) {
+            const token = jwt.sign({
+                userId: storedUser.id,
+            }, process.env.TOKEN_SECRET, { expiresIn: '1h' });
+            let user = { ...storedUser, token }
             delete user.password;
             debugServer("the user has been logIn successfully")
             return res.status(200).send({ message: "logIn successfully", user })
@@ -156,6 +125,40 @@ router.post("/login", (req, res) => {
     } catch (error) {
         debugServer("failed to logIn %o", error);
         return res.status(500).send({ message: "logIn failed" });
+    }
+});
+
+router.post("/signUp", async (req, res) => {
+    try {
+        const firstName = req.body.firstName;
+        const lastName = req.body.lastName;
+        const email = req.body.email.trim().toLowerCase();
+        const password = req.body.password;
+        const address = req.body.address;
+        if (!firstName || !lastName || !email || !password || !address) {
+            return res.status(400).send({ message: "firstName or lastName or email or password or address not valid" })
+        }
+        const existingUser = await UserDAO.getUserByEmail(email)
+        if (existingUser.email) {
+            return res.status(400).send({ message: "this email is used" })
+        }
+        let hashedPassword = await bcrypt.hash(password, 10)
+        let newUser = new UserDAO();
+        for (let key in req.body) {
+            if (newUser.hasOwnProperty(key)) {
+                newUser[key] = req.body[key];
+            }
+        }
+        newUser.password = hashedPassword;
+        await newUser.save();
+        const token = jwt.sign({
+            userId: newUser.id,
+        }, process.env.TOKEN_SECRET, { expiresIn: '1h' });
+        debugServer("the user has been signUp successfully")
+        return res.status(200).send({ message: "signUp successfully", user: { ...newUser, token } })
+    } catch (error) {
+        debugServer("failed to signUp %o", error);
+        return res.status(500).send({ message: "signUp failed" });
     }
 });
 
