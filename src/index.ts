@@ -1,10 +1,12 @@
-import dotenv from 'dotenv';
+const dotenv = require('dotenv')
 dotenv.config();
-import express from 'express';
+const express = require("express");
 import debug from "debug";
 const debugServer = debug('task:server');
 import tasksRoutes from "./routes/tasksRouter";
 import usersRoutes from "./routes/usersRouter";
+import { AppDataSource } from "./database/main";
+const jwt = require('jsonwebtoken');
 
 
 const app = express();
@@ -16,7 +18,7 @@ app.use(express.json());
 app.use(function (req, res, next) {
 
     // Website you wish to allow to connect
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
 
     // Request methods you wish to allow
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -32,19 +34,21 @@ app.use(function (req, res, next) {
     }
 });
 app.use((req, res, next) => {
-    const whiteListed = ['/users/login']
-    if (!whiteListed.includes(req.url)) {
-        const token: string = req.get("Authorization");
-        if (!token) {
-            return res.status(400).send({ message: "missing token login again" });
-        }
-        if (token === "123456") {
+    const whiteListed = ['/users/login', '/users/signUp']
+    try {
+        if (!whiteListed.includes(req.url)) {
+            const token: string = req.get("Authorization")!;
+            if (!token) {
+                return res.status(403).send({ message: "missing token login again" });
+            }
+            const data = jwt.verify(token, process.env.TOKEN_SECRET)
+            req.body.userId = data.userId;
             return next();
         } else {
-            return res.status(401).send({ message: "invalid token login again" });
+            return next();
         }
-    } else {
-        return next();
+    } catch (_error) {
+        return res.status(403).send({ message: "invalid token login again" });
     }
 })
 
@@ -57,6 +61,10 @@ app.use("/tasks", tasksRoutes);
 
 app.use("/users", usersRoutes);
 
-app.listen(8050, () => {
-    debugServer('listening');
-});
+AppDataSource.initialize()
+    .then(() => {
+        app.listen(8050, () => {
+            debugServer('listening');
+        });
+    })
+    .catch((error) => console.log(error))
